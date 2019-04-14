@@ -21,7 +21,7 @@ import java.util.Scanner;
 public class Main {
 
 	private static final String cfgfile = "builder.cfg";
-	private static final String version = "1.0.0";
+	private static final String version = "1.0.1";
 	private static Properties properties = new Properties();
 	private static Map<String, String> overrides = new HashMap<>();
 	private static boolean buildFailure = false;
@@ -57,9 +57,25 @@ public class Main {
 
 			String outputDir = getProperty("OutputDir");
 
-			File[] addons = new File("addons").listFiles(file -> file.getName().startsWith("TBMod_"));
+			File[] addons = new File("addons").listFiles(file -> file.getName().startsWith("TBMod"));
+			File[] existingaddons = new File(outputDir).listFiles(file -> file.getName().startsWith("TBMod"));
+
 			for (File addonfolder : addons)
 				processAddon(addonfolder, outputDir);
+
+			for (File existingaddon : existingaddons) {
+				boolean found = false;
+				for (File addon : addons) {
+					if (existingaddon.getName().startsWith(addon.getName())) {
+						found = true;
+						break;
+					}
+				}
+				if (!found) {
+					System.out.println(existingaddon.getName() + " deleted.");
+					existingaddon.delete();
+				}
+			}
 
 			System.out.println("Ende");
 			if (getProperty("WaitOnNormalEnd?").equals("true") || buildFailure)
