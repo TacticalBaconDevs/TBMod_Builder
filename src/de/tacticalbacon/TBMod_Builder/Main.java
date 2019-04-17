@@ -164,7 +164,7 @@ public class Main {
 				return;
 			}
 
-			Process p = new ProcessBuilder("MakePbo.exe", "-A", "-B", "-D", "-P", "-X=*.txt,*.dep,*.cpp,*.bak,*.png,*.log,*.pew,*.ini,*.rar", addonfolder.toString(), outputDir).start();
+			Process p = new ProcessBuilder("MakePbo.exe", "-A", "-B", "-D", "-P", "-U", "-X=*.txt,*.dep,*.cpp,*.bak,*.png,*.log,*.pew,*.ini,*.rar", addonfolder.toString(), outputDir).start();
 			String line;
 			boolean error = true;
 			inputerror = new BufferedReader(new InputStreamReader(p.getErrorStream()));
