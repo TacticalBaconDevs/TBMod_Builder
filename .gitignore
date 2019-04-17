@@ -6,3 +6,4 @@
 *.cmd
 *.dll
 *.class
+/bin/

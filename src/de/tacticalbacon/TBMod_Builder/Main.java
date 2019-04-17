@@ -21,7 +21,7 @@ import java.util.Scanner;
 public class Main {
 
 	private static final String cfgfile = "builder.cfg";
-	private static final String version = "1.0.1";
+	private static final String version = "1.0.2";
 	private static Properties properties = new Properties();
 	private static Map<String, String> overrides = new HashMap<>();
 	private static boolean buildFailure = false;
@@ -77,7 +77,7 @@ public class Main {
 				}
 			}
 
-			System.out.println("Ende");
+			System.out.print("Ende - ");
 			if (getProperty("WaitOnNormalEnd?").equals("true") || buildFailure)
 				requestClose();
 		} catch (Exception e) {
@@ -154,11 +154,13 @@ public class Main {
 		BufferedReader input = null;
 
 		try {
-			System.out.println("Baue " + addonfolder.getName() + " ...");
-
+			System.out.print("Baue " + addonfolder.getName());
+			if (addonfolder.getName().length() <= 10)
+				System.out.print("   ");
+			
 			File pbo = new File(String.format("%s\\%s.pbo", outputDir, addonfolder.getName()));
 			if (pbo.exists() && getLastModified(addonfolder).before(getLastModified(pbo))) {
-				System.out.println("\t>>> Überspringe, da bereits aktuell!");
+				System.out.println("\t>>> Überspringe");
 				return;
 			}
 
@@ -174,13 +176,13 @@ public class Main {
 			while ((line = inputerror.readLine()) != null) {
 				incaserror.append(line + "\n");
 				if (line.contains("No Error(s)")) {
-					System.out.println("\t> " + addonfolder.getName() + " erfolgreich gebaut!");
+					System.out.println("\t>>> erfolgreich gebaut!");
 					error = false;
 				}
 			}
 			if (error) {
 				buildFailure = true;
-				System.out.println("\t!!! " + addonfolder.getName() + " wurde nicht erfolgreich gebaut. Fehler folgt...");
+				System.out.println("\t!!! wurde nicht erfolgreich gebaut. Fehler folgt...");
 				System.out.println(incaserror);
 			}
 		} finally {
