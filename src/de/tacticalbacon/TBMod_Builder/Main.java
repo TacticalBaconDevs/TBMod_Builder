@@ -86,7 +86,7 @@ public class Main {
 			for (File existingaddon : existingaddons) {
 				boolean found = false;
 				for (File addon : addons) {
-					if (existingaddon.getName().equals("TBMod_"+ addon.getName())) {
+					if (existingaddon.getName().equals("TBMod_"+ addon.getName() +".pbo")) {
 						found = true;
 						break;
 					}
@@ -106,12 +106,82 @@ public class Main {
 			requestClose();
 		}
 	}
-
-	private static void requestClose() throws IOException {
-		System.out.println("Drücke Enter zum beenden.");
-		System.in.read();
-	}
 	
+	private static void processAddon(File addonfolder, String outputDir) throws Exception {
+		BufferedReader inputerror = null;
+		BufferedReader input = null;
+
+		try {
+			System.out.print("Baue " + addonfolder.getName());
+			
+			// TODO: großer Müll
+			if (addonfolder.getName().length() <= 2)
+				System.out.print("\t");
+			if (addonfolder.getName().length() <= 10)
+				System.out.print("\t");
+			
+			File pbo = new File(String.format("%s\\%s.pbo", outputDir, addonfolder.getName()));
+			if (pbo.exists() && getLastModified(addonfolder).before(getLastModified(pbo))) { // TODO: wenn im neuen eine File gelöscht, dann überspringt er trotzdem
+				System.out.println("\t>>> Überspringe");
+				return;
+			}
+			
+			String args = getProperty("currentArgs").replaceAll("<ADDON_NAME>", addonfolder.getName());
+			
+			// Baue Befehl zusammen
+			List<String> command = new ArrayList<>();
+			command.add("MakePbo.exe");
+			command.addAll(Arrays.asList(args.split(" ")));
+			command.add(addonfolder.toString());
+			command.add(outputDir + "\\TBMod_"+ addonfolder.getName());
+			
+			ProcessBuilder processBuilder = new ProcessBuilder(command);
+			Process process = processBuilder.start();
+			debug("\nDebug Buildcmd: "+ String.join(" ", command));
+			
+			String line;
+			boolean error = true;
+			inputerror = new BufferedReader(new InputStreamReader(process.getErrorStream()));
+			input = new BufferedReader(new InputStreamReader(process.getInputStream()));
+			StringBuilder incaserror = new StringBuilder();
+			
+			// MakePbo ohne etwas läuft unednlich ohne Ausgabe
+			Timer timeout = new Timer();
+			timeout.schedule(new TimerTask() {
+				@Override
+				public void run() {
+					incaserror.append("!!! TIMEOUT !!!\n");
+					process.destroy();
+				}
+			}, 5000);
+			
+			while ((line = input.readLine()) != null) {
+				incaserror.append(line + "\n");
+			}
+			
+			while ((line = inputerror.readLine()) != null) {
+				incaserror.append(line + "\n");
+				if (line.contains("No Error(s)")) {
+					System.out.println("\t>>> erfolgreich gebaut!");
+					error = false;
+				}
+			}
+			
+			timeout.cancel();
+			
+			if (error) {
+				buildFailure = true;
+				System.out.println("\t!!! wurde nicht erfolgreich gebaut. Fehler folgt...");
+				System.out.println(incaserror);
+			}
+		} finally {
+			if (inputerror != null)
+				inputerror.close();
+			if (input != null)
+				input.close();
+		}
+	}
+
 	private static void initConfig() throws Exception {
 		if (new File(cfgfile).exists()) {
 			properties.load(new FileInputStream(cfgfile));
@@ -183,77 +253,6 @@ public class Main {
 		}
 	}
 
-	private static void processAddon(File addonfolder, String outputDir) throws Exception {
-		BufferedReader inputerror = null;
-		BufferedReader input = null;
-
-		try {
-			System.out.print("Baue " + addonfolder.getName());
-			if (addonfolder.getName().length() <= 10)
-				System.out.print("   ");
-			
-			File pbo = new File(String.format("%s\\%s.pbo", outputDir, addonfolder.getName()));
-			if (pbo.exists() && getLastModified(addonfolder).before(getLastModified(pbo))) { // TODO: wenn im neuen eine File gelöscht, dann überspringt er trotzdem
-				System.out.println("\t>>> Überspringe");
-				return;
-			}
-			
-			String args = getProperty("currentArgs").replaceAll("<ADDON_NAME>", addonfolder.getName());
-			
-			// Baue Befehl zusammen
-			List<String> command = new ArrayList<>();
-			command.add("MakePbo.exe");
-			command.addAll(Arrays.asList(args.split(" ")));
-			command.add(addonfolder.toString());
-			command.add(outputDir + "\\TBMod_"+ addonfolder.getName());
-			
-			ProcessBuilder processBuilder = new ProcessBuilder(command);
-			Process process = processBuilder.start();
-			debug("\nDebug Buildcmd: "+ String.join(" ", command));
-			
-			String line;
-			boolean error = true;
-			inputerror = new BufferedReader(new InputStreamReader(process.getErrorStream()));
-			input = new BufferedReader(new InputStreamReader(process.getInputStream()));
-			StringBuilder incaserror = new StringBuilder();
-			
-			// MakePbo ohne etwas läuft unednlich ohne Ausgabe
-			Timer timeout = new Timer();
-			timeout.schedule(new TimerTask() {
-				@Override
-				public void run() {
-					incaserror.append("!!! TIMEOUT !!!\n");
-					process.destroy();
-				}
-			}, 5000);
-			
-			while ((line = input.readLine()) != null) {
-				incaserror.append(line + "\n");
-			}
-			
-			while ((line = inputerror.readLine()) != null) {
-				incaserror.append(line + "\n");
-				if (line.contains("No Error(s)")) {
-					System.out.println("\t>>> erfolgreich gebaut!");
-					error = false;
-				}
-			}
-			
-			timeout.cancel();
-			
-			if (error) {
-				buildFailure = true;
-				System.out.println("\t!!! wurde nicht erfolgreich gebaut. Fehler folgt...");
-				System.out.println(incaserror);
-			}
-		} finally {
-			if (inputerror != null)
-				inputerror.close();
-			if (input != null)
-				input.close();
-		}
-	}
-
 	private static String getProperty(String key) throws Exception {
 		String result = overrides.containsKey(key) ? overrides.get(key) : properties.getProperty(key);
 
@@ -295,6 +294,11 @@ public class Main {
 	private static void debug(String msg) {
 		if (overrides.containsKey("debug"))
 			System.out.println(msg);
+	}
+	
+	private static void requestClose() throws IOException {
+		System.out.println("Drücke Enter zum beenden.");
+		System.in.read();
 	}
 
 }
