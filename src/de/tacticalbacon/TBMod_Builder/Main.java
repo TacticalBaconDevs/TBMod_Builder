@@ -106,14 +106,6 @@ public class Main {
 			requestClose();
 		}
 	}
-	
-	@SuppressWarnings("resource")
-	public static String execCmd(String cmd) throws java.io.IOException {
-	    Scanner s = new Scanner(Runtime.getRuntime().exec(cmd).getInputStream()).useDelimiter("\\A");
-	    String result = s.hasNext() ? s.next() : "";
-	    s.close();
-	    return result;
-	}
 
 	private static void requestClose() throws IOException {
 		System.out.println("Drücke Enter zum beenden.");
@@ -278,7 +270,7 @@ public class Main {
 	}
 
 	// Sub files need to be also tested
-	public static Date getLastModified(File input) {
+	private static Date getLastModified(File input) {
 		if (input.isFile())
 			return new Date(input.lastModified());
 
