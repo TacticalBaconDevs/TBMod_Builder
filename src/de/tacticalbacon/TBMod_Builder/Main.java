@@ -120,7 +120,7 @@ public class Main {
 			if (addonfolder.getName().length() <= 10)
 				System.out.print("\t");
 			
-			File pbo = new File(String.format("%s\\%s.pbo", outputDir, addonfolder.getName()));
+			File pbo = new File(String.format("%s\\TBMod_%s.pbo", outputDir, addonfolder.getName()));
 			if (pbo.exists() && getLastModified(addonfolder).before(getLastModified(pbo))) { // TODO: wenn im neuen eine File gelöscht, dann überspringt er trotzdem
 				System.out.println("\t>>> Überspringe");
 				return;
