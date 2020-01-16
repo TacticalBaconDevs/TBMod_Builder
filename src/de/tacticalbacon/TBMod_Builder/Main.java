@@ -24,7 +24,7 @@ import java.util.TimerTask;
 public class Main {
 
 	private static final String cfgfile = new File("builder.cfg").getAbsolutePath();
-	private static final String version = "1.0.4";
+	private static final String version = "1.0.5 (16.01.2020)";
 	private static Properties properties = new Properties();
 	private static Map<String, String> overrides = new HashMap<>();
 	private static boolean buildFailure = false;
