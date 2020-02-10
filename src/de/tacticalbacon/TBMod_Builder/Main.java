@@ -24,12 +24,12 @@ import java.util.TimerTask;
 public class Main {
 
 	private static final String cfgfile = new File("builder.cfg").getAbsolutePath();
-	private static final String version = "1.0.5 (16.01.2020)";
+	private static final String version = "1.0.6 (10.02.2020)";
 	private static Properties properties = new Properties();
 	private static Map<String, String> overrides = new HashMap<>();
 	private static boolean buildFailure = false;
-	private static String arguments = "-A -B -D -P -U -X\\=*.txt,*.dep,*.cpp,*.bak,*.png,*.log,*.pew,*.ini,*.rar -@\\=x\\\\TBMod\\\\addons\\\\<ADDON_NAME>";
-	private static String reqVersion = "MakePbo x64UnicodeVersion 1.99, Dll 7.16";
+	private static String arguments = "-A -B -D -P -U -X=thumbs.db,*.h,*.txt,*.dep,*.cpp,*.bak,*.png,*.log,*.pew,*.ini,*.rar -@=x\\TBMod\\addons\\<ADDON_NAME>";
+	private static String reqVersion = "Version 2.04, Dll 7.46";
 
 	public static void main(String[] args) throws Exception {
 		// per Doppelklick gestartet, neu mit Console aufrufen
@@ -68,7 +68,7 @@ public class Main {
 		String output = inputerror.readLine();
 		
 		if (!output.contains(reqVersion))
-			System.out.println("!!!ACHTUNG!!! Die DLL oder MakePBO Version weicht von der für den Builder gemachten Version ab. Derzeit: "+ output +" | Builder: "+ reqVersion);
+			System.out.println("!!!ACHTUNG!!! Die DLL oder MakePBO Version weicht von der für den Builder gemachten Version ab.\nDerzeit: "+ output +"\nBuilder: "+ reqVersion+ "\n");
 		
 		try {
 			initConfig();
@@ -81,7 +81,7 @@ public class Main {
 			File[] existingaddons = new File(outputDir).listFiles(file -> file.getName().startsWith("TBMod_") && !file.isDirectory());
 
 			for (File addonfolder : addons)
-				processAddon(addonfolder, outputDir);
+				processAddon(addonfolder, outputDir, false);
 
 			for (File existingaddon : existingaddons) {
 				boolean found = false;
@@ -107,17 +107,18 @@ public class Main {
 		}
 	}
 	
-	private static void processAddon(File addonfolder, String outputDir) throws Exception {
+	private static void processAddon(File addonfolder, String outputDir, Boolean ignoreUnbin) throws Exception {
 		BufferedReader inputerror = null;
 		BufferedReader input = null;
 
 		try {
-			System.out.print("Baue " + addonfolder.getName());
+			if (!ignoreUnbin)
+				System.out.print("Baue " + addonfolder.getName());
 			
 			// TODO: großer Müll
-			if (addonfolder.getName().length() <= 2)
+			if (!ignoreUnbin && addonfolder.getName().length() <= 2)
 				System.out.print("\t");
-			if (addonfolder.getName().length() <= 10)
+			if (!ignoreUnbin && addonfolder.getName().length() <= 10)
 				System.out.print("\t");
 			
 			File pbo = new File(String.format("%s\\TBMod_%s.pbo", outputDir, addonfolder.getName()));
@@ -127,6 +128,8 @@ public class Main {
 			}
 			
 			String args = getProperty("currentArgs").replaceAll("<ADDON_NAME>", addonfolder.getName());
+			if (ignoreUnbin)
+				args = args.replaceAll("-A", "-A -U").replace("-F ", "").replace("-G ", "").replace("-Z=default", "");
 			
 			// Baue Befehl zusammen
 			List<String> command = new ArrayList<>();
@@ -136,16 +139,16 @@ public class Main {
 			command.add(outputDir + "\\TBMod_"+ addonfolder.getName());
 			
 			ProcessBuilder processBuilder = new ProcessBuilder(command);
+			processBuilder.redirectErrorStream(true);
 			Process process = processBuilder.start();
 			debug("\nDebug Buildcmd: "+ String.join(" ", command));
 			
 			String line;
 			boolean error = true;
-			inputerror = new BufferedReader(new InputStreamReader(process.getErrorStream()));
 			input = new BufferedReader(new InputStreamReader(process.getInputStream()));
 			StringBuilder incaserror = new StringBuilder();
 			
-			// MakePbo ohne etwas läuft unednlich ohne Ausgabe
+			// MakePbo ohne etwas läuft unendlich ohne Ausgabe
 			Timer timeout = new Timer();
 			timeout.schedule(new TimerTask() {
 				@Override
@@ -157,11 +160,13 @@ public class Main {
 			
 			while ((line = input.readLine()) != null) {
 				incaserror.append(line + "\n");
-			}
-			
-			while ((line = inputerror.readLine()) != null) {
-				incaserror.append(line + "\n");
-				if (line.contains("No Error(s)")) {
+				
+				if (line.contains("Detected unbinarised p3d(s)") || line.contains("you cannot compress unbinarised p3ds")) {
+					processAddon(addonfolder, outputDir, true);
+					return;
+				}
+				
+				if (line.contains("File written to") || line.contains("No Error(s)")) {
 					System.out.println("\t>>> erfolgreich gebaut!");
 					error = false;
 				}
@@ -174,6 +179,9 @@ public class Main {
 				System.out.println("\t!!! wurde nicht erfolgreich gebaut. Fehler folgt...");
 				System.out.println(incaserror);
 			}
+			
+			if (!error && overrides.containsKey("debug"))
+				System.out.println(incaserror);
 		} finally {
 			if (inputerror != null)
 				inputerror.close();
@@ -186,7 +194,7 @@ public class Main {
 		if (new File(cfgfile).exists()) {
 			properties.load(new FileInputStream(cfgfile));
 
-			// ### setzt sur Übersicht immer die
+			// ### setzt zur Übersicht immer die
 			properties.setProperty("recommendedArgs", arguments);
 			properties.store(new FileOutputStream(cfgfile), "TBMod Builder");
 		} else {
@@ -289,6 +297,25 @@ public class Main {
 
 		Arrays.sort(moddates, (o1, o2) -> o2.compareTo(o1));
 		return new Date(moddates[0]);
+	}
+	
+	@SuppressWarnings("unused")
+	private static int fileCount(File input) {
+		if (input.isFile())
+			return 1;
+
+		File[] directories = input.listFiles(file -> file.isDirectory());
+		File[] files = input.listFiles(file -> file.isFile());
+
+		if (files.length == 0 && directories.length == 0)
+			return 0;
+		
+		int count = files.length;
+
+		for (File dir : directories)
+			count += fileCount(dir);
+		
+		return count;
 	}
 	
 	private static void debug(String msg) {
