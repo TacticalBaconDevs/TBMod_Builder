@@ -20,64 +20,68 @@ import java.util.Properties;
 import java.util.Scanner;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.stream.Collectors;
 
 public class Main {
 
 	private static final String cfgfile = new File("builder.cfg").getAbsolutePath();
-	private static final String version = "1.0.6 (10.02.2020)";
+	private static final String version = "1.0.7 (03.12.2021)";
 	private static Properties properties = new Properties();
 	private static Map<String, String> overrides = new HashMap<>();
 	private static boolean buildFailure = false;
 	private static String arguments = "-A -B -D -P -U -X=thumbs.db,*.h,*.txt,*.dep,*.cpp,*.bak,*.png,*.log,*.pew,*.ini,*.rar -@=x\\TBMod\\addons\\<ADDON_NAME>";
 	private static String reqVersion = "Version 2.04, Dll 7.46";
+	private static String execDir = "";
 
 	public static void main(String[] args) throws Exception {
+		List<String> argumente = Arrays.asList(args);
+		
 		// per Doppelklick gestartet, neu mit Console aufrufen
 		Console console = System.console();
-		boolean inIDE = System.getProperty("java.class.path").toLowerCase().contains("eclipse");
+		boolean inIDE = System.getProperty("java.class.path").toLowerCase().contains("eclipse") || argumente.contains("-ide");
 		if (!inIDE && console == null && !GraphicsEnvironment.isHeadless()) {
 			String filename = new File(Main.class.getProtectionDomain().getCodeSource().getLocation().toURI()).getPath();
-			Runtime.getRuntime().exec(String.format("cmd /c start cmd /c java -jar \"%s\" %s", filename, String.join(" ", args)));
+			Runtime.getRuntime().exec(String.format("cmd /c start cmd /c java -jar \"%s\" %s -restartedWithConsole", filename, String.join(" ", args)));
 			return;
 		}
 
 		// Argument-Support
-		if (args.length != 0) {
+		if (!argumente.isEmpty() && !(argumente.size() == 1 && argumente.contains("-restartedWithConsole"))) {
 			System.out.println("Parameter erkannt: " + Arrays.toString(args));
 
-			List<String> argumente = Arrays.asList(args);
 			argumente.stream().map((item) -> item.startsWith("-") ? item.substring(1).trim() : item.trim()).forEach((item) -> {
 				// PropertiesOverride
 				if (item.contains("=")) {
 					String[] split = item.split("=");
-					overrides.put(split[0].trim().substring(1), split[1].replace("\"", "").trim());
+					overrides.put(split[0].trim(), split[1].replace("\"", "").trim());
 				} else {
 					overrides.put(item.trim(), "");
 				}
 			});
 		}
 		
-		System.out.println("TBMod Builder v" + version + " gestartet...");
-		debug("Ausgeführt in: " + new File("addons").getAbsolutePath());
-		
-		System.setProperty("user.dir", overrides.getOrDefault("Duser.dir", new File("").getAbsolutePath()));
-		
-		// MakePBO & DLL (Version)-Check
-		Process process = Runtime.getRuntime().exec("MakePbo.exe -P");
-		BufferedReader inputerror = new BufferedReader(new InputStreamReader(process.getErrorStream()));
-		String output = inputerror.readLine();
-		
-		if (!output.contains(reqVersion))
-			System.out.println("!!!ACHTUNG!!! Die DLL oder MakePBO Version weicht von der für den Builder gemachten Version ab.\nDerzeit: "+ output +"\nBuilder: "+ reqVersion+ "\n");
-		
 		try {
-			initConfig();
+			System.out.println("TBMod Builder v" + version + " gestartet...");
+			debug("Overrides: %s", mapToString(overrides));
 			
-			System.setProperty("user.dir", getProperty("ExecDir"));
-
+			initConfig();
+			debug("Config: %s", mapToString(properties));
+			
+			System.setProperty("user.dir", overrides.getOrDefault("Duser.dir", getProperty("ExecDir")));
+			execDir = System.getProperty("user.dir");
+			debug("Ausgeführt in: %s", new File(execDir, "addons").getAbsolutePath());
+			
+			// MakePBO & DLL (Version)-Check
+			Process process = Runtime.getRuntime().exec("MakePbo.exe -P");
+			BufferedReader inputerror = new BufferedReader(new InputStreamReader(process.getErrorStream()));
+			String output = inputerror.readLine();
+			
+			if (!output.contains(reqVersion))
+				System.out.println("!!!ACHTUNG!!! Die DLL oder MakePBO Version weicht von der für den Builder gemachten Version ab.\nDerzeit: "+ output +"\nBuilder: "+ reqVersion+ "\n");
+			
 			String outputDir = getProperty("OutputDir");
 
-			File[] addons = new File(new File("addons").getAbsolutePath()).listFiles(file -> !file.getName().startsWith("#") && file.isDirectory());
+			File[] addons = new File(new File(execDir, "addons").getAbsolutePath()).listFiles(file -> !file.getName().startsWith("#") && file.isDirectory());
 			File[] existingaddons = new File(outputDir).listFiles(file -> file.getName().startsWith("TBMod_") && !file.isDirectory());
 
 			for (File addonfolder : addons)
@@ -121,7 +125,7 @@ public class Main {
 			if (!ignoreUnbin && addonfolder.getName().length() <= 10)
 				System.out.print("\t");
 			
-			File pbo = new File(String.format("%s\\TBMod_%s.pbo", outputDir, addonfolder.getName()));
+			File pbo = new File(outputDir, String.format("TBMod_%s.pbo", addonfolder.getName()));
 			if (pbo.exists() && getLastModified(addonfolder).before(getLastModified(pbo))) { // TODO: wenn im neuen eine File gelöscht, dann überspringt er trotzdem
 				System.out.println("\t>>> Überspringe");
 				return;
@@ -256,7 +260,7 @@ public class Main {
 			properties.store(new FileOutputStream(cfgfile), "TBMod Builder");
 		}
 		if (!properties.containsKey("ExecDir")) {
-			properties.setProperty("ExecDir", new File("").getAbsolutePath());
+			properties.setProperty("ExecDir", "P:\\x\\TBMod");
 			properties.store(new FileOutputStream(cfgfile), "TBMod Builder");
 		}
 	}
@@ -323,9 +327,20 @@ public class Main {
 			System.out.println(msg);
 	}
 	
+	private static void debug(String msg, Object... args) {
+		if (overrides.containsKey("debug"))
+			System.out.println(String.format(msg, args));
+	}
+	
 	private static void requestClose() throws IOException {
 		System.out.println("Drücke Enter zum beenden.");
 		System.in.read();
 	}
-
+	
+	public static String mapToString(Map<?, ?> map) {
+	    String mapAsString = map.keySet().stream()
+	      .map(key -> key + "=" + map.get(key))
+	      .collect(Collectors.joining(", ", "{", "}"));
+	    return mapAsString;
+	}
 }
